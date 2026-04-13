@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CFG Converter — CNF & GNF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f0ff;
+    --muted: #7878a0;
+    --cyan: #22d3ee;
+    --teal: #2dd4bf;
+    --violet: #a78bfa;
+    --purple: #c084fc;
+    --pink: #f472b6;
+    --amber: #fbbf24;
+    --emerald: #34d399;
+    --blue: #60a5fa;
+    --rose: #fb7185;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background blobs ── */
+  .bg-blobs {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+  }
+  .bg-blobs span {
+    position: absolute; border-radius: 50%;
+    filter: blur(80px); opacity: 0.18;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+  .bg-blobs span:nth-child(1) { width:500px;height:500px;top:-120px;right:-120px;background:radial-gradient(circle,#22d3ee,#2dd4bf); animation-delay:0s; }
+  .bg-blobs span:nth-child(2) { width:400px;height:400px;top:40%;left:-100px;background:radial-gradient(circle,#a78bfa,#c084fc); animation-delay:-4s; }
+  .bg-blobs span:nth-child(3) { width:350px;height:350px;bottom:-80px;right:25%;background:radial-gradient(circle,#f472b6,#fb7185); animation-delay:-8s; }
+  @keyframes drift { from{transform:translate(0,0) scale(1);} to{transform:translate(30px,20px) scale(1.08);} }
+
+  /* ── Layout ── */
+  .content { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:0 20px 60px; }
+
+  /* ── Header ── */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.75);
+    backdrop-filter: blur(20px);
+  }
+  .header-inner {
+    max-width:1200px; margin:0 auto; padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon {
+    width:44px; height:44px; border-radius:14px;
+    background: linear-gradient(135deg,#22d3ee,#2dd4bf);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 20px rgba(34,211,238,0.3);
+  }
+  .logo-icon svg { width:22px; height:22px; }
+  .logo-title { font-size:20px; font-weight:700; background:linear-gradient(90deg,#22d3ee,#2dd4bf,#34d399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .logo-sub { font-size:19px; color:var(--muted); margin-top:1px; }
+  .gh-btn {
+    width:38px; height:38px; border-radius:12px;
+    background:var(--surface2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--muted); cursor:pointer; transition:all .2s;
+    text-decoration:none;
+  }
+  .gh-btn:hover { color:var(--text); background:var(--surface); }
+  .theme-btn {
+    width:38px; height:38px; border-radius:12px;
+    background:var(--surface2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--muted); cursor:pointer; transition:all .2s;
+    font-size:20px; margin-left:8px;
+  }
+  .theme-btn:hover { color:var(--text); }
+  .header-actions { display:flex; align-items:center; }
+
+  /* ── Hero ── */
+  .hero { text-align:center; padding:52px 0 40px; }
+  .hero-badge {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:6px 16px; border-radius:999px;
+    background:rgba(34,211,238,0.08); border:1px solid rgba(34,211,238,0.2);
+    font-size:19px; color:var(--cyan); font-weight:500; margin-bottom:24px;
+  }
+  .hero h2 { font-size:clamp(36px,5vw,62px); font-weight:700; line-height:1.1; margin-bottom:16px; }
+  .hero h2 .grad { background:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero p { font-size:19px; color:var(--muted); max-width:560px; margin:0 auto; line-height:1.65; }
+
+  /* ── Mode toggle ── */
+  .mode-wrap { display:flex; justify-content:center; margin-bottom:32px; }
+  .mode-pills {
+    display:inline-flex; background:var(--surface2); border:1px solid var(--border);
+    border-radius:18px; padding:5px; gap:4px;
+  }
+  .mode-pill {
+    padding:10px 22px; border-radius:13px; font-size:16px; font-weight:600;
+    cursor:pointer; border:none; transition:all .25s; color:var(--muted); background:transparent;
+    display:flex; align-items:center; gap:7px;
+  }
+  .mode-pill.active-cnf { background:linear-gradient(135deg,#22d3ee,#2dd4bf); color:#000; box-shadow:0 0 18px rgba(34,211,238,0.35); }
+  .mode-pill.active-gnf { background:linear-gradient(135deg,#a78bfa,#c084fc); color:#000; box-shadow:0 0 18px rgba(167,139,250,0.35); }
+
+  /* ── Pipeline bar ── */
+  .pipeline { display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:32px; }
+  .pipe-step {
+    padding:6px 14px; border-radius:10px; font-size:16px; font-weight:600;
+    border:1px solid var(--border); background:var(--surface2); color:var(--muted);
+    transition:all .3s;
+  }
+  .pipe-step.done { background:rgba(34,211,238,0.1); border-color:rgba(34,211,238,0.3); color:var(--cyan); }
+  .pipe-step.done.gnf-done { background:rgba(167,139,250,0.1); border-color:rgba(167,139,250,0.3); color:var(--violet); }
+  .pipe-arrow { color:rgba(255,255,255,0.2); font-size:16px; transition:color .3s; }
+  .pipe-arrow.lit { color:var(--cyan); }
+  .pipe-arrow.lit-gnf { color:var(--violet); }
+
+  /* ── Grid ── */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; }
+  @media(max-width:768px){ .grid2{grid-template-columns:1fr;} }
+
+  /* ── Card ── */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:20px; overflow:hidden;
+  }
+  .card-head {
+    padding:18px 22px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .card-head-left { display:flex; align-items:center; gap:12px; }
+  .card-icon {
+    width:34px; height:34px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .card-icon svg { width:16px; height:16px; }
+  .card-title { font-size:19px; font-weight:600; }
+  .card-sub { font-size:16px; color:var(--muted); margin-top:2px; }
+  .card-body { padding:22px; }
+
+  /* ── Textarea ── */
+  textarea {
+    width:100%; min-height:190px; resize:vertical;
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:12px; padding:14px; color:var(--text);
+    font-family:'JetBrains Mono',monospace; font-size:19px; line-height:1.7;
+    outline:none; transition:border-color .2s;
+  }
+  textarea:focus { border-color:rgba(34,211,238,0.4); box-shadow:0 0 0 3px rgba(34,211,238,0.08); }
+  .btn-row { display:flex; gap:10px; margin-top:14px; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding:10px 18px; border-radius:12px; font-size:16px; font-weight:600;
+    cursor:pointer; border:none; transition:all .2s; display:flex; align-items:center; gap:7px;
+    font-family:'Space Grotesk',sans-serif;
+  }
+  .btn-primary-cnf { flex:1; background:linear-gradient(135deg,#22d3ee,#2dd4bf); color:#000; box-shadow:0 4px 14px rgba(34,211,238,0.3); }
+  .btn-primary-cnf:hover { box-shadow:0 6px 20px rgba(34,211,238,0.4); transform:translateY(-1px); }
+  .btn-primary-gnf { flex:1; background:linear-gradient(135deg,#a78bfa,#c084fc); color:#000; box-shadow:0 4px 14px rgba(167,139,250,0.3); }
+  .btn-primary-gnf:hover { box-shadow:0 6px 20px rgba(167,139,250,0.4); transform:translateY(-1px); }
+  .btn-outline {
+    background:var(--surface2); color:var(--muted); border:1px solid var(--border); padding:10px 14px;
+  }
+  .btn-outline:hover { color:var(--text); background:var(--surface); }
+  .btn-sm { padding:7px 14px; font-size:19px; }
+
+  /* ── Output ── */
+  .grammar-box {
+    border-radius:12px; padding:16px; font-family:'JetBrains Mono',monospace;
+    font-size:19px; line-height:1.8; min-height:130px; border:1px solid;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  .grammar-box.cnf-box { background:rgba(34,211,238,0.06); border-color:rgba(34,211,238,0.2); color:#b2f0f8; }
+  .grammar-box.gnf-box { background:rgba(167,139,250,0.06); border-color:rgba(167,139,250,0.2); color:#d8c8ff; }
+
+  .step-desc { font-size:19px; color:var(--muted); margin-top:14px; line-height:1.7; }
+
+  /* ── Nav dots ── */
+  .nav-row { display:flex; align-items:center; justify-content:space-between; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+  .dots { display:flex; gap:6px; align-items:center; }
+  .dot {
+    width:10px; height:10px; border-radius:999px;
+    background:var(--border); cursor:pointer; transition:all .2s;
+    border:none;
+  }
+  .dot.active-cnf { width:28px; background:linear-gradient(90deg,#22d3ee,#2dd4bf); }
+  .dot.active-gnf { width:28px; background:linear-gradient(90deg,#a78bfa,#c084fc); }
+
+  /* ── Placeholder ── */
+  .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; gap:14px; color:var(--muted); }
+  .empty-icon { width:70px; height:70px; border-radius:20px; background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); display:flex; align-items:center; justify-content:center; }
+  .empty-icon svg { width:36px; height:36px; opacity:.4; }
+
+  /* ── Timeline ── */
+  .timeline-card { margin-bottom:20px; }
+  .timeline-item {
+    display:flex; align-items:center; gap:16px; padding:14px 18px;
+    border-radius:16px; border:1px solid var(--border); cursor:pointer;
+    transition:all .2s; background:transparent; width:100%; text-align:left;
+    margin-bottom:8px; font-family:'Space Grotesk',sans-serif;
+  }
+  .timeline-item:hover { background:var(--surface2); }
+  .timeline-item.active-cnf { background:linear-gradient(135deg,rgba(34,211,238,0.15),rgba(45,212,191,0.15)); border-color:rgba(34,211,238,0.35); }
+  .timeline-item.active-gnf { background:linear-gradient(135deg,rgba(167,139,250,0.15),rgba(192,132,252,0.15)); border-color:rgba(167,139,250,0.35); }
+  .tl-num {
+    width:38px; height:38px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px;
+  }
+  .tl-name { font-weight:600; font-size:16px; }
+  .tl-desc { font-size:16px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .tl-preview {
+    margin-left:auto; flex-shrink:0; max-width:200px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:8px 12px; font-family:'JetBrains Mono',monospace;
+    font-size:19px; overflow:hidden; white-space:pre; max-height:52px;
+    color:rgba(240,240,255,0.7);
+  }
+
+  /* ── Reference cards ── */
+  .ref-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media(max-width:600px){ .ref-grid{grid-template-columns:1fr;} }
+  .ref-card { border-radius:18px; padding:20px; border:1px solid var(--border); background:var(--surface); }
+  .ref-title { display:flex; align-items:center; gap:12px; font-weight:600; margin-bottom:16px; }
+  .ref-icon { width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; }
+  .rule-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; margin-bottom:8px; font-size:19px; }
+  .dot-sm { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+  /* ── Format guide ── */
+  .fmt-card { border-radius:18px; padding:20px; border:1px solid var(--border); background:var(--surface); margin-bottom:16px; }
+  .fmt-title { display:flex; align-items:center; gap:12px; font-weight:600; margin-bottom:16px; }
+  .fmt-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  @media(max-width:600px){ .fmt-grid{grid-template-columns:1fr 1fr;} }
+  .fmt-item { border-radius:12px; padding:14px; border:1px solid; }
+  .fmt-label { font-size:19px; font-weight:600; margin-bottom:6px; }
+  .fmt-val { font-family:'JetBrains Mono',monospace; font-size:19px; }
+  .fmt-hint { font-size:19px; color:var(--muted); margin-top:4px; }
+  .fmt-example {
+    margin-top:14px; padding:14px 16px; border-radius:12px;
+    background:rgba(52,211,153,0.06); border:1px solid rgba(52,211,153,0.2);
+  }
+  .fmt-ex-label { font-size:19px; color:var(--emerald); font-weight:600; margin-bottom:8px; }
+  .fmt-ex-code { font-family:'JetBrains Mono',monospace; font-size:19px; line-height:1.8; white-space:pre; }
+
+  /* ── Footer ── */
+  footer { text-align:center; padding:28px 20px; border-top:1px solid var(--border); font-size:19px; color:var(--muted); }
+  footer span { background:linear-gradient(90deg,#22d3ee,#2dd4bf); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-weight:600; }
+
+  /* ── Transitions ── */
+  .fade-in { animation:fadeIn .35s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+
+  /* ── Toast ── */
+  .toast {
+    position:fixed; bottom:24px; right:24px; z-index:999;
+    padding:12px 20px; border-radius:12px; font-size:19px; font-weight:500;
+    background:var(--surface2); border:1px solid var(--border);
+    box-shadow:0 8px 30px rgba(0,0,0,0.4);
+    transform:translateY(100px); opacity:0; transition:all .3s;
+  }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .toast.success { border-color:rgba(52,211,153,0.4); color:var(--emerald); }
+  .toast.error { border-color:rgba(251,113,133,0.4); color:var(--rose); }
+
+  /* Light mode */
+  body.light {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --surface2: #f0f2f8;
+    --border: rgba(0,0,0,0.1);
+    --text: #0d0d1a;
+    --muted: #6b7280;
+  }
+  body.light textarea { color:var(--text); }
+  body.light .grammar-box.cnf-box { color:#0c5a6e; }
+  body.light .grammar-box.gnf-box { color:#4a2d8a; }
+  body.light .tl-preview { color:rgba(13,13,26,0.7); }
+</style>
+</head>
+<body>
+
+<!-- Background blobs -->
+<div class="bg-blobs"><span></span><span></span><span></span></div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg fill="none" stroke="#000" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-title">CFG Converter</div>
+        <div class="logo-sub">Context-Free Grammar Transformer</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="theme-btn" id="themeBtn" title="Toggle theme">🌙</button>
+      <a href="https://github.com" target="_blank" class="gh-btn" style="margin-left:8px;" title="GitHub">
+        <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+      Theoretical Computer Science Tool
+    </div>
+    <h2>Transform your grammars<br><span class="grad">step by step</span></h2>
+    <p>Convert Context-Free Grammars to Chomsky Normal Form or Greibach Normal Form with detailed intermediate transformations.</p>
+  </div>
+
+  <!-- Mode pills -->
+  <div class="mode-wrap">
+    <div class="mode-pills">
+      <button class="mode-pill active-cnf" id="btnCNF" onclick="setMode('cnf')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Chomsky Normal Form
+      </button>
+      <button class="mode-pill" id="btnGNF" onclick="setMode('gnf')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+        Greibach Normal Form
+      </button>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="pipeline" id="pipeline"></div>
+
+  <!-- Main grid -->
+  <div class="grid2">
+    <!-- Input -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="card-icon" style="background:linear-gradient(135deg,#22d3ee,#2dd4bf);">
+            <svg fill="none" stroke="#000" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          </div>
+          <div>
+            <div class="card-title">Input Grammar</div>
+            <div class="card-sub">One production per line. Use → or -></div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <textarea id="grammarInput" spellcheck="false">S -> ASB | e
+A -> aAS | a | e
+B -> SbS | A | bb</textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary-cnf" id="convertBtn" onclick="handleConvert()">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+            <span id="convertLabel">Convert to CNF</span>
+          </button>
+          <button class="btn btn-outline" onclick="handleReset()" title="Reset">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 109-9 9 9 0 000 18"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 12V6m0 6H9"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="card-icon" id="outIcon" style="background:linear-gradient(135deg,#a78bfa,#c084fc);">
+            <span id="outIconNum" style="font-weight:700;font-size:19px;color:#000;">?</span>
+          </div>
+          <div>
+            <div class="card-title" id="outTitle">Result</div>
+            <div class="card-sub" id="outSub">Run conversion to see results</div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" id="exportBtn" onclick="handleDownload()" style="display:none;">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+          Export
+        </button>
+      </div>
+      <div class="card-body" id="outputBody">
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          </div>
+          <p style="font-size:19px;">Enter a grammar and click Convert</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div id="timelineSection" style="display:none;" class="card timeline-card">
+    <div class="card-head">
+      <div class="card-head-left">
+        <div class="card-icon" style="background:linear-gradient(135deg,#f472b6,#fb7185);">
+          <svg width="16" height="16" fill="none" stroke="#000" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Complete Transformation Timeline</div>
+          <div class="card-sub" id="timelineSub">All steps</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" id="timelineBody"></div>
+  </div>
+
+  <!-- Reference -->
+  <div class="ref-grid">
+    <div class="ref-card">
+      <div class="ref-title">
+        <div class="ref-icon" style="background:linear-gradient(135deg,#22d3ee,#2dd4bf);color:#000;">C</div>
+        CNF Requirements
+      </div>
+      <div class="rule-row" style="background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.15);">
+        <span class="dot-sm" style="background:#22d3ee;"></span>A → BC (two non-terminals)
+      </div>
+      <div class="rule-row" style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);">
+        <span class="dot-sm" style="background:#2dd4bf;"></span>A → a (single terminal)
+      </div>
+      <div class="rule-row" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);">
+        <span class="dot-sm" style="background:#34d399;"></span>S → ε (only if ε ∈ L(G))
+      </div>
+    </div>
+    <div class="ref-card">
+      <div class="ref-title">
+        <div class="ref-icon" style="background:linear-gradient(135deg,#a78bfa,#c084fc);color:#000;">G</div>
+        GNF Requirements
+      </div>
+      <div class="rule-row" style="background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.15);">
+        <span class="dot-sm" style="background:#a78bfa;"></span>A → aα (terminal first)
+      </div>
+      <div class="rule-row" style="background:rgba(192,132,252,0.08);border:1px solid rgba(192,132,252,0.15);">
+        <span class="dot-sm" style="background:#c084fc;"></span>α is a string of non-terminals
+      </div>
+      <div class="rule-row" style="background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.15);">
+        <span class="dot-sm" style="background:#f472b6;"></span>S → ε (only if ε ∈ L(G))
+      </div>
+    </div>
+  </div>
+
+  <!-- Format guide -->
+  <div class="fmt-card">
+    <div class="fmt-title">
+      <div class="ref-icon" style="background:linear-gradient(135deg,#fbbf24,#f97316);color:#000;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+      </div>
+      Input Format Guide
+    </div>
+    <div class="fmt-grid">
+      <div class="fmt-item" style="background:rgba(34,211,238,0.05);border-color:rgba(34,211,238,0.2);">
+        <div class="fmt-label" style="color:#22d3ee;">Non-terminals</div>
+        <div class="fmt-val">A, B, C, S</div>
+        <div class="fmt-hint">uppercase letters</div>
+      </div>
+      <div class="fmt-item" style="background:rgba(167,139,250,0.05);border-color:rgba(167,139,250,0.2);">
+        <div class="fmt-label" style="color:#a78bfa;">Terminals</div>
+        <div class="fmt-val">a, b, c</div>
+        <div class="fmt-hint">lowercase letters</div>
+      </div>
+      <div class="fmt-item" style="background:rgba(244,114,182,0.05);border-color:rgba(244,114,182,0.2);">
+        <div class="fmt-label" style="color:#f472b6;">Arrow</div>
+        <div class="fmt-val">→ or -></div>
+        <div class="fmt-hint">separator</div>
+      </div>
+      <div class="fmt-item" style="background:rgba(251,191,36,0.05);border-color:rgba(251,191,36,0.2);">
+        <div class="fmt-label" style="color:#fbbf24;">Epsilon</div>
+        <div class="fmt-val">e or ε</div>
+        <div class="fmt-hint">empty string</div>
+      </div>
+    </div>
+    <div class="fmt-example">
+      <div class="fmt-ex-label">✦ Example Grammar</div>
+      <div class="fmt-ex-code">S -> AB | a
+A -> aA | e
+B -> bB | b</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Built for learning CFG transformations in <span>Theoretical Computer Science</span></footer>
+
+<script>
+// ─────────────────────────────────────────────
+// Grammar Engine (full port from page.tsx)
+// ─────────────────────────────────────────────
+function parseGrammar(input) {
+  const lines = input.trim().split('\n').filter(l => l.trim());
+  const productions = [];
+  let start = '';
+  for (const line of lines) {
+    const m = line.match(/^\s*([A-Z]'?)\s*[-→>]+\s*(.+)\s*$/);
+    if (m) {
+      const left = m[1];
+      if (!start) start = left;
+      const rights = m[2].split('|').map(r => r.trim());
+      for (const right of rights) {
+        productions.push({ left, right: (right === 'ε' || right === 'e') ? ['ε'] : right.split('') });
+      }
+    }
+  }
+  return { start, productions };
+}
+
+function grammarToString(grammar) {
+  const grouped = {};
+  for (const p of grammar.productions) {
+    if (!grouped[p.left]) grouped[p.left] = [];
+    grouped[p.left].push(p.right);
+  }
+  const lines = [];
+  if (grouped[grammar.start]) {
+    lines.push(`${grammar.start} → ${grouped[grammar.start].map(r => r.join('')).join(' | ')}`);
+    delete grouped[grammar.start];
+  }
+  for (const [left, rights] of Object.entries(grouped)) {
+    lines.push(`${left} → ${rights.map(r => r.join('')).join(' | ')}`);
+  }
+  return lines.join('\n');
+}
+
+function cloneGrammar(g) {
+  return { start: g.start, productions: g.productions.map(p => ({ left: p.left, right: [...p.right] })) };
+}
+
+function getNonTerminals(g) {
+  const nt = new Set();
+  for (const p of g.productions) nt.add(p.left);
+  return nt;
+}
+
+function getTerminals(g) {
+  const nt = getNonTerminals(g);
+  const t = new Set();
+  for (const p of g.productions)
+    for (const s of p.right)
+      if (s !== 'ε' && !nt.has(s)) t.add(s);
+  return t;
+}
+
+function removeUseless(g) {
+  const result = cloneGrammar(g);
+  const terminals = getTerminals(g);
+  const generating = new Set(terminals);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of result.productions) {
+      if (!generating.has(p.left) && p.right.every(s => s === 'ε' || generating.has(s))) {
+        generating.add(p.left); changed = true;
+      }
+    }
+  }
+  result.productions = result.productions.filter(p =>
+    generating.has(p.left) && p.right.every(s => s === 'ε' || generating.has(s)));
+  const reachable = new Set([result.start]);
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of result.productions)
+      if (reachable.has(p.left))
+        for (const s of p.right)
+          if (s !== 'ε' && !reachable.has(s)) { reachable.add(s); changed = true; }
+  }
+  result.productions = result.productions.filter(p =>
+    reachable.has(p.left) && p.right.every(s => s === 'ε' || reachable.has(s)));
+  return result;
+}
+
+function removeEpsilon(g) {
+  const result = cloneGrammar(g);
+  const nullable = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of result.productions) {
+      if (!nullable.has(p.left) &&
+        ((p.right.length === 1 && p.right[0] === 'ε') || p.right.every(s => nullable.has(s))))
+      { nullable.add(p.left); changed = true; }
+    }
+  }
+  const newProds = [];
+  for (const p of result.productions) {
+    if (p.right.length === 1 && p.right[0] === 'ε') continue;
+    const npos = [];
+    for (let i = 0; i < p.right.length; i++) if (nullable.has(p.right[i])) npos.push(i);
+    const subsets = 1 << npos.length;
+    for (let mask = 0; mask < subsets; mask++) {
+      const nr = [];
+      for (let i = 0; i < p.right.length; i++) {
+        const ni = npos.indexOf(i);
+        if (ni === -1 || !(mask & (1 << ni))) nr.push(p.right[i]);
+      }
+      if (nr.length > 0 && !newProds.some(np => np.left === p.left && np.right.join('') === nr.join('')))
+        newProds.push({ left: p.left, right: nr });
+    }
+  }
+  if (nullable.has(result.start)) {
+    const ns = result.start + "'";
+    newProds.unshift({ left: ns, right: [result.start] });
+    newProds.unshift({ left: ns, right: ['ε'] });
+    result.start = ns;
+  }
+  result.productions = newProds;
+  return result;
+}
+
+function removeUnit(g) {
+  const result = cloneGrammar(g);
+  const nt = getNonTerminals(g);
+  const unitPairs = new Map();
+  for (const A of nt) unitPairs.set(A, new Set([A]));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const p of result.productions) {
+      if (p.right.length === 1 && nt.has(p.right[0])) {
+        const ASet = unitPairs.get(p.left), BSet = unitPairs.get(p.right[0]);
+        if (BSet) for (const C of BSet) if (!ASet.has(C)) { ASet.add(C); changed = true; }
+      }
+    }
+  }
+  const newProds = [];
+  for (const [A, reachable] of unitPairs) {
+    for (const B of reachable) {
+      for (const p of result.productions) {
+        if (p.left === B && !(p.right.length === 1 && nt.has(p.right[0]))) {
+          if (!newProds.some(np => np.left === A && np.right.join('') === p.right.join('')))
+            newProds.push({ left: A, right: [...p.right] });
+        }
+      }
+    }
+  }
+  result.productions = newProds;
+  return result;
+}
+
+function breakLong(g) {
+  const result = cloneGrammar(g);
+  const newProds = [];
+  const used = getNonTerminals(g);
+  let counter = 1;
+  function newName() { let n; do { n = `X${counter++}`; } while (used.has(n)); used.add(n); return n; }
+  for (const p of result.productions) {
+    if (p.right.length <= 2) { newProds.push(p); continue; }
+    let cur = p.right, left = p.left;
+    while (cur.length > 2) { const nn = newName(); newProds.push({ left, right: [cur[0], nn] }); left = nn; cur = cur.slice(1); }
+    newProds.push({ left, right: cur });
+  }
+  result.productions = newProds;
+  return result;
+}
+
+function replaceTerminals(g) {
+  const result = cloneGrammar(g);
+  const terminals = getTerminals(g);
+  const tmap = new Map();
+  const used = getNonTerminals(g);
+  let counter = 1;
+  function newName(t) {
+    if (tmap.has(t)) return tmap.get(t);
+    let n; do { n = `T${counter++}`; } while (used.has(n)); used.add(n); tmap.set(t, n); return n;
+  }
+  const newProds = [];
+  for (const p of result.productions) {
+    if (p.right.length === 1) { newProds.push(p); continue; }
+    newProds.push({ left: p.left, right: p.right.map(s => terminals.has(s) ? newName(s) : s) });
+  }
+  for (const [t, n] of tmap) newProds.push({ left: n, right: [t] });
+  result.productions = newProds;
+  return result;
+}
+
+function removeLeftRecursion(g) {
+  const result = cloneGrammar(g);
+  const ntArr = Array.from(getNonTerminals(g));
+  const used = new Set(ntArr);
+  function newName(base) { let n = base + "'"; while (used.has(n)) n += "'"; used.add(n); return n; }
+  for (let i = 0; i < ntArr.length; i++) {
+    const Ai = ntArr[i];
+    for (let j = 0; j < i; j++) {
+      const Aj = ntArr[j], newProds = [];
+      for (const p of result.productions) {
+        if (p.left === Ai && p.right[0] === Aj) {
+          for (const pj of result.productions) {
+            if (pj.left === Aj) newProds.push({ left: Ai, right: [...pj.right, ...p.right.slice(1)] });
+          }
+        } else newProds.push(p);
+      }
+      result.productions = newProds;
+    }
+    const rec = [], nonRec = [];
+    for (const p of result.productions) {
+      if (p.left === Ai) (p.right[0] === Ai ? rec : nonRec).push(p);
+    }
+    if (rec.length > 0) {
+      const nn = newName(Ai);
+      ntArr.push(nn);
+      result.productions = result.productions.filter(p => p.left !== Ai);
+      for (const p of nonRec) {
+        if (p.right.length === 1 && p.right[0] === 'ε') { result.productions.push({ left: Ai, right: [nn] }); }
+        else { result.productions.push({ left: Ai, right: [...p.right] }); result.productions.push({ left: Ai, right: [...p.right, nn] }); }
+      }
+      for (const p of rec) {
+        const alpha = p.right.slice(1);
+        result.productions.push({ left: nn, right: alpha });
+        result.productions.push({ left: nn, right: [...alpha, nn] });
+      }
+    }
+  }
+  return result;
+}
+
+function substituteForGNF(g) {
+  const result = cloneGrammar(g);
+  const terminals = getTerminals(g);
+  const nt = getNonTerminals(g);
+  let maxIter = 100;
+  while (maxIter-- > 0) {
+    let changed = false;
+    const newProds = [];
+    for (const p of result.productions) {
+      if (p.right.length === 1 && p.right[0] === 'ε') { newProds.push(p); continue; }
+      const first = p.right[0];
+      if (terminals.has(first)) { newProds.push(p); }
+      else if (nt.has(first) && first !== p.left) {
+        changed = true;
+        for (const sub of result.productions) {
+          if (sub.left === first) {
+            const nr = [...sub.right, ...p.right.slice(1)];
+            if (!newProds.some(np => np.left === p.left && np.right.join('') === nr.join('')))
+              newProds.push({ left: p.left, right: nr });
+          }
+        }
+      } else newProds.push(p);
+    }
+    result.productions = newProds;
+    if (!changed) break;
+  }
+  return result;
+}
+
+function convertToCNF(input) {
+  let g = parseGrammar(input);
+  const steps = [{ name: 'Input Grammar', description: 'The original context-free grammar provided as input.', grammar: cloneGrammar(g) }];
+  g = removeUseless(g); steps.push({ name: 'Remove Useless Symbols', description: 'Eliminate non-generating and unreachable symbols. A symbol is useless if it cannot derive any terminal string or is not reachable from the start symbol.', grammar: cloneGrammar(g) });
+  g = removeEpsilon(g); steps.push({ name: 'Remove Epsilon Productions', description: 'Eliminate all ε-productions by finding nullable variables and creating all possible combinations without nullable symbols.', grammar: cloneGrammar(g) });
+  g = removeUnit(g); steps.push({ name: 'Remove Unit Productions', description: 'Eliminate unit productions (A → B) by computing unit pairs and directly adding the non-unit productions.', grammar: cloneGrammar(g) });
+  g = breakLong(g); steps.push({ name: 'Break Long Productions', description: 'Break productions with more than 2 symbols by introducing new non-terminals (A → BCD becomes A → BX, X → CD).', grammar: cloneGrammar(g) });
+  g = replaceTerminals(g); steps.push({ name: 'Replace Terminals', description: 'Replace terminals in mixed productions with new non-terminals that produce only that terminal.', grammar: cloneGrammar(g) });
+  steps.push({ name: 'Chomsky Normal Form ✓', description: 'The grammar is now in CNF. All productions are either A → BC (two non-terminals) or A → a (single terminal).', grammar: cloneGrammar(g) });
+  return steps;
+}
+
+function convertToGNF(input) {
+  let g = parseGrammar(input);
+  const steps = [{ name: 'Input Grammar', description: 'The original context-free grammar provided as input.', grammar: cloneGrammar(g) }];
+  g = removeUseless(g); steps.push({ name: 'Remove Useless Symbols', description: 'Remove non-generating and unreachable symbols from the grammar.', grammar: cloneGrammar(g) });
+  g = removeEpsilon(g); steps.push({ name: 'Remove Epsilon Productions', description: 'Eliminate all ε-productions by finding nullable variables and creating combinations.', grammar: cloneGrammar(g) });
+  g = removeUnit(g); steps.push({ name: 'Remove Unit Productions', description: 'Eliminate unit productions (A → B) by substituting the right-hand sides.', grammar: cloneGrammar(g) });
+  g = removeLeftRecursion(g); steps.push({ name: 'Remove Left Recursion', description: 'Eliminate both direct and indirect left recursion to prepare for GNF conversion.', grammar: cloneGrammar(g) });
+  g = substituteForGNF(g); steps.push({ name: 'Substitute for Terminal First', description: 'Substitute non-terminals until each production starts with a terminal symbol.', grammar: cloneGrammar(g) });
+  steps.push({ name: 'Greibach Normal Form ✓', description: 'The grammar is now in GNF. All productions are A → a(α) where a is a terminal and α is a string of non-terminals.', grammar: cloneGrammar(g) });
+  return steps;
+}
+
+// ─────────────────────────────────────────────
+// UI State
+// ─────────────────────────────────────────────
+let mode = 'cnf';
+let steps = [];
+let currentStep = 0;
+
+const cnfPipeline = ['Useless', 'Epsilon', 'Unit', 'Break', 'Replace', 'CNF'];
+const gnfPipeline = ['Useless', 'Epsilon', 'Unit', 'Left Rec', 'Substitute', 'GNF'];
+
+const gradColors = [
+  { bg: 'linear-gradient(135deg,#22d3ee,#2dd4bf)', light: 'rgba(34,211,238,0.12)', border: 'rgba(34,211,238,0.3)', text: '#7ef4ff' },
+  { bg: 'linear-gradient(135deg,#a78bfa,#c084fc)', light: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)', text: '#d4baff' },
+  { bg: 'linear-gradient(135deg,#f472b6,#fb7185)', light: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.3)', text: '#ffb3cc' },
+  { bg: 'linear-gradient(135deg,#fbbf24,#f97316)', light: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)', text: '#ffe0a0' },
+  { bg: 'linear-gradient(135deg,#34d399,#10b981)', light: 'rgba(52,211,153,0.12)', border: 'rgba(52,211,153,0.3)', text: '#a0ffd8' },
+  { bg: 'linear-gradient(135deg,#60a5fa,#3b82f6)', light: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.3)', text: '#b3d4ff' },
+  { bg: 'linear-gradient(135deg,#fb7185,#f43f5e)', light: 'rgba(251,113,133,0.12)', border: 'rgba(251,113,133,0.3)', text: '#ffb3be' },
+];
+
+function setMode(m) {
+  mode = m;
+  handleReset();
+  document.getElementById('btnCNF').className = 'mode-pill' + (m === 'cnf' ? ' active-cnf' : '');
+  document.getElementById('btnGNF').className = 'mode-pill' + (m === 'gnf' ? ' active-gnf' : '');
+  const cvt = document.getElementById('convertBtn');
+  cvt.className = 'btn ' + (m === 'cnf' ? 'btn-primary-cnf' : 'btn-primary-gnf');
+  document.getElementById('convertLabel').textContent = `Convert to ${m.toUpperCase()}`;
+  renderPipeline([], 0);
+}
+
+function renderPipeline(steps, cur) {
+  const pipe = document.getElementById('pipeline');
+  const list = mode === 'cnf' ? cnfPipeline : gnfPipeline;
+  pipe.innerHTML = '';
+  list.forEach((name, i) => {
+    const s = document.createElement('span');
+    s.className = 'pipe-step' + (steps.length > 0 && cur >= i + 1 ? (mode === 'cnf' ? ' done' : ' done gnf-done') : '');
+    s.textContent = name;
+    pipe.appendChild(s);
+    if (i < list.length - 1) {
+      const a = document.createElement('span');
+      a.className = 'pipe-arrow' + (steps.length > 0 && cur >= i + 2 ? (mode === 'cnf' ? ' lit' : ' lit lit-gnf') : '');
+      a.textContent = '›';
+      pipe.appendChild(a);
+    }
+  });
+}
+
+function renderOutput() {
+  if (steps.length === 0) {
+    document.getElementById('outIconNum').textContent = '?';
+    document.getElementById('outIcon').style.background = 'linear-gradient(135deg,#a78bfa,#c084fc)';
+    document.getElementById('outTitle').textContent = 'Result';
+    document.getElementById('outSub').textContent = 'Run conversion to see results';
+    document.getElementById('exportBtn').style.display = 'none';
+    document.getElementById('outputBody').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" width="36" height="36"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></div>
+        <p style="font-size:19px;">Enter a grammar and click Convert</p>
+      </div>`;
+    return;
+  }
+  const step = steps[currentStep];
+  const col = gradColors[currentStep % gradColors.length];
+  document.getElementById('outIconNum').textContent = currentStep + 1;
+  document.getElementById('outIcon').style.background = col.bg;
+  document.getElementById('outTitle').textContent = step.name;
+  document.getElementById('outSub').textContent = `Step ${currentStep + 1} of ${steps.length}`;
+  document.getElementById('exportBtn').style.display = '';
+
+  const boxCls = mode === 'cnf' ? 'cnf-box' : 'gnf-box';
+  const dots = steps.map((_, i) => {
+    const cls = i === currentStep ? (mode === 'cnf' ? 'dot active-cnf' : 'dot active-gnf') : 'dot';
+    return `<button class="${cls}" onclick="goStep(${i})"></button>`;
+  }).join('');
+
+  document.getElementById('outputBody').innerHTML = `
+    <div class="grammar-box ${boxCls} fade-in">${escHtml(grammarToString(step.grammar))}</div>
+    <p class="step-desc">${step.description}</p>
+    <div class="nav-row">
+      <button class="btn btn-outline btn-sm" onclick="goStep(${currentStep - 1})" ${currentStep === 0 ? 'disabled style="opacity:.4;"' : ''}>‹ Previous</button>
+      <div class="dots">${dots}</div>
+      <button class="btn btn-outline btn-sm" onclick="goStep(${currentStep + 1})" ${currentStep === steps.length - 1 ? 'disabled style="opacity:.4;"' : ''}>Next ›</button>
+    </div>`;
+}
+
+function renderTimeline() {
+  if (steps.length === 0) { document.getElementById('timelineSection').style.display = 'none'; return; }
+  document.getElementById('timelineSection').style.display = '';
+  document.getElementById('timelineSub').textContent = `All steps from input to ${mode.toUpperCase()}`;
+  const body = document.getElementById('timelineBody');
+  body.innerHTML = steps.map((step, i) => {
+    const col = gradColors[i % gradColors.length];
+    const isActive = i === currentStep;
+    const activeCls = isActive ? (mode === 'cnf' ? ' active-cnf' : ' active-gnf') : '';
+    const numStyle = isActive ? `background:rgba(255,255,255,0.15);color:#fff;` : `background:${col.bg};color:#000;`;
+    const preview = escHtml(grammarToString(step.grammar).split('\n').slice(0, 3).join('\n'));
+    return `<button class="timeline-item${activeCls}" onclick="goStep(${i})">
+      <div class="tl-num" style="${numStyle}">${i < currentStep ? '✓' : i + 1}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="tl-name">${step.name}</div>
+        <div class="tl-desc">${step.description}</div>
+      </div>
+      <div class="tl-preview">${preview}</div>
+    </button>`;
+  }).join('');
+}
+
+function goStep(i) {
+  if (i < 0 || i >= steps.length) return;
+  currentStep = i;
+  renderPipeline(steps, currentStep);
+  renderOutput();
+  renderTimeline();
+}
+
+function handleConvert() {
+  const input = document.getElementById('grammarInput').value;
+  if (!input.trim()) { showToast('Please enter a grammar first.', 'error'); return; }
+  try {
+    steps = mode === 'cnf' ? convertToCNF(input) : convertToGNF(input);
+    currentStep = 0;
+    renderPipeline(steps, currentStep);
+    renderOutput();
+    renderTimeline();
+    showToast(`Converted to ${mode.toUpperCase()} in ${steps.length - 1} steps!`, 'success');
+  } catch (e) {
+    showToast('Error parsing grammar. Check format.', 'error');
+  }
+}
+
+function handleReset() {
+  steps = [];
+  currentStep = 0;
+  renderPipeline([], 0);
+  renderOutput();
+  renderTimeline();
+}
+
+function handleDownload() {
+  if (!steps.length) return;
+  const content = steps.map((s, i) =>
+    `${'='.repeat(50)}\nStep ${i + 1}: ${s.name}\n${'='.repeat(50)}\n${s.description}\n\nGrammar:\n${grammarToString(s.grammar)}\n`
+  ).join('\n');
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `cfg-to-${mode}-conversion.txt`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('File downloaded!', 'success');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => { t.className = `toast ${type}`; }, 3000);
+}
+
+// Theme toggle
+let darkMode = true;
+document.getElementById('themeBtn').addEventListener('click', () => {
+  darkMode = !darkMode;
+  document.body.classList.toggle('light', !darkMode);
+  document.getElementById('themeBtn').textContent = darkMode ? '🌙' : '☀️';
+});
+
+// Init
+renderPipeline([], 0);
+renderOutput();
+</script>
+</body>
+</html>
